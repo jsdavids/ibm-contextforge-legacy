@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "legacybridge"
+version = "0.1.0"
+description = "Wrap a legacy REST service as MCP tools behind IBM ContextForge, add an A2A triage agent, JWT auth, and OpenTelemetry tracing."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "agentmesh",
+    "httpx>=0.28",
+    "pyyaml>=6",
+    "starlette>=1.0",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+# ContextForge itself (needs Python 3.12 or 3.13); or run it from the container in deploy/
+gateway = ["mcp-contextforge-gateway==1.1.0"]
+
+[project.scripts]
+legacybridge = "legacybridge.cli:main"
+
+[tool.uv.sources]
+agentmesh = { path = "../agent-mesh-core", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/legacybridge"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

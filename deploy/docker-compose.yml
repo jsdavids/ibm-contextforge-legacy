@@ -1,0 +1,95 @@
+# ContextForge + Jaeger + the legacy service + the triage agent.
+#   cd deploy && cp .env.example .env   # fill in secrets
+#   docker compose up --build
+#   open http://localhost:16686 (Jaeger) after running a triage
+name: legacybridge
+
+x-app: &app
+  build: {context: ../.., dockerfile: ibm-contextforge-legacy/deploy/Dockerfile}
+  image: legacybridge:dev
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment: {COLLECTOR_OTLP_ENABLED: "true"}
+    ports: ["16686:16686"]          # UI; OTLP 4317/4318 stay on the internal network
+
+  cf-volume-init:                   # the image runs as uid 10001; a fresh named volume is root-owned
+    image: ghcr.io/ibm/mcp-context-forge:v1.1.0
+    user: root
+    entrypoint: ["chown", "-R", "10001:10001", "/data"]
+    volumes: [cf-data:/data]
+
+  contextforge:
+    image: ghcr.io/ibm/mcp-context-forge:v1.1.0
+    ports: ["4444:4444"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4444"
+      DATABASE_URL: sqlite:////data/mcp.db
+      # the image defaults to min(2*CPU+1, 16) gunicorn workers, which stall at
+      # startup on one SQLite file; use Postgres (+ Redis) before raising this
+      GUNICORN_WORKERS: "1"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
+      AUTH_ENCRYPTION_SECRET: ${AUTH_ENCRYPTION_SECRET:?set in .env}
+      PLATFORM_ADMIN_EMAIL: admin@example.com
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?set in .env}
+      DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD:?set in .env}
+      MCPGATEWAY_ADMIN_API_ENABLED: "true"
+      MCPGATEWAY_UI_ENABLED: "false"
+      MCPGATEWAY_A2A_ENABLED: "true"
+      SSRF_ALLOW_PRIVATE_NETWORKS: "true"   # legacy-api and triage live on this private network
+      CACHE_TYPE: database
+      OTEL_ENABLE_OBSERVABILITY: "true"
+      OTEL_TRACES_EXPORTER: otlp
+      # OTLP over HTTP, not gRPC: gunicorn preloads the app and then forks, and a
+      # gRPC exporter started before the fork hangs worker startup
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces   # ContextForge uses this URL as-is for http
+      OTEL_EXPORTER_OTLP_PROTOCOL: http
+      OTEL_SERVICE_NAME: contextforge
+    volumes: [cf-data:/data]
+    depends_on:
+      jaeger: {condition: service_started}
+      cf-volume-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4444/health')"]
+      interval: 5s
+      retries: 30
+
+  legacy-api:
+    <<: *app
+    command: ["python", "-m", "uvicorn", "legacybridge.legacy_api:app", "--factory", "--host", "0.0.0.0", "--port", "9300"]
+    environment:
+      LEGACY_API_KEY: ${LEGACY_API_KEY:?set in .env}
+
+  register:                         # one-shot: publish tools + agent, mint scoped tokens
+    <<: *app
+    command: ["legacybridge", "register", "--config", "/app/bridge.yaml"]
+    environment:
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      LEGACY_API_KEY: ${LEGACY_API_KEY}
+      AGENTMESH_UPSTREAM_KEY: ${AGENTMESH_UPSTREAM_KEY:?set in .env}
+      LEGACYBRIDGE_TOKENS: /shared/cf_tokens.json
+    volumes: [shared:/shared]
+    depends_on:
+      contextforge: {condition: service_healthy}
+      legacy-api: {condition: service_started}
+      triage: {condition: service_started}   # ContextForge resolves the agent's host when registering it
+    restart: on-failure
+
+  triage:
+    <<: *app
+    command: ["python", "-m", "agentmesh.serve", "legacybridge.triage:app", "--host", "0.0.0.0", "--port", "9310"]
+    environment:
+      TRIAGE_PUBLIC_URL: http://triage:9310
+      AGENTMESH_UPSTREAM_KEY: ${AGENTMESH_UPSTREAM_KEY}   # only ContextForge presents this
+      LEGACYBRIDGE_TOKENS: /shared/cf_tokens.json
+      CONTEXTFORGE_IDENTITY: triage-agent
+      AGENTMESH_TRACING: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318   # standard SDK: base URL, it appends /v1/traces
+      OTEL_SERVICE_NAME: triage-agent
+    volumes: [shared:/shared:ro]   # token file appears after `register`; read on each request
+
+volumes:
+  cf-data:
+  shared:

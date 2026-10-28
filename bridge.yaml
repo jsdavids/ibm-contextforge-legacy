@@ -1,0 +1,34 @@
+# How the legacy service desk and the triage agent are published through ContextForge.
+contextforge:
+  url: http://127.0.0.1:4444          # in docker compose: http://contextforge:4444
+  admin_email: admin@example.com      # PLATFORM_ADMIN_EMAIL
+  jwt_secret_env: JWT_SECRET_KEY      # same secret ContextForge signs with
+  token_ttl_minutes: 720
+
+legacy:
+  openapi_url: http://127.0.0.1:9300/openapi.json
+  base_url: http://127.0.0.1:9300     # as reached from ContextForge
+  api_key_env: LEGACY_API_KEY         # stored encrypted in ContextForge, never given to agents
+  # operationId -> description agents see. decommissionAsset is deliberately absent.
+  expose:
+    listAssets: List IT assets, optionally filtered by status (active|retired) and owner team.
+    getAsset: Get one IT asset (hostname, owner team, OS, status) by asset_id, e.g. SRV-1001.
+    listTickets: List incident tickets, optionally filtered by status (open|resolved) and asset_id.
+    getTicket: Get one incident ticket with its comments by ticket_id, e.g. INC-5001.
+    createTicket: Open a new incident ticket for an asset with a summary and priority P1-P4.
+    addComment: Add a comment to an existing incident ticket.
+
+a2a_agents:
+  - name: triage
+    url: http://127.0.0.1:9310/
+    description: Scores an incident's severity and writes a triage note to the ticket.
+    tags: [itsm]
+
+virtual_server:
+  name: service-desk
+  description: Legacy service desk tools plus the triage agent, for MCP clients.
+
+# ContextForge identities to mint scoped tokens for (written to .cf_tokens.json)
+identities:
+  triage-agent: triage-agent@example.com
+  analyst: analyst@example.com

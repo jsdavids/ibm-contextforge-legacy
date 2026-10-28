@@ -1,0 +1,28 @@
+# bridge.yaml with in-network hostnames for docker compose
+contextforge:
+  url: http://contextforge:4444
+  admin_email: admin@example.com
+  jwt_secret_env: JWT_SECRET_KEY
+  token_ttl_minutes: 720
+legacy:
+  openapi_url: http://legacy-api:9300/openapi.json
+  base_url: http://legacy-api:9300
+  api_key_env: LEGACY_API_KEY
+  expose:
+    listAssets: List IT assets, optionally filtered by status (active|retired) and owner team.
+    getAsset: Get one IT asset (hostname, owner team, OS, status) by asset_id, e.g. SRV-1001.
+    listTickets: List incident tickets, optionally filtered by status (open|resolved) and asset_id.
+    getTicket: Get one incident ticket with its comments by ticket_id, e.g. INC-5001.
+    createTicket: Open a new incident ticket for an asset with a summary and priority P1-P4.
+    addComment: Add a comment to an existing incident ticket.
+a2a_agents:
+  - name: triage
+    url: http://triage:9310/
+    description: Scores an incident's severity and writes a triage note to the ticket.
+    tags: [itsm]
+virtual_server:
+  name: service-desk
+  description: Legacy service desk tools plus the triage agent, for MCP clients.
+identities:
+  triage-agent: triage-agent@example.com
+  analyst: analyst@example.com
