@@ -5,7 +5,7 @@
 name: legacybridge
 
 x-app: &app
-  build: {context: ../.., dockerfile: ibm-contextforge-legacy/deploy/Dockerfile}
+  build: {context: .., dockerfile: deploy/Dockerfile}
   image: legacybridge:dev
 
 services:

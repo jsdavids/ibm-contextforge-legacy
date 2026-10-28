@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Wrap a legacy REST service as MCP tools behind IBM ContextForge, add an A2A triage agent, JWT auth, and OpenTelemetry tracing."
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "agentmesh",
+    "agentmesh @ https://github.com/jsdavids/agent-mesh-core/archive/refs/tags/v0.1.0.tar.gz",
     "httpx>=0.28",
     "pyyaml>=6",
     "starlette>=1.0",
@@ -23,8 +23,8 @@ gateway = ["mcp-contextforge-gateway==1.1.0"]
 [project.scripts]
 legacybridge = "legacybridge.cli:main"
 
-[tool.uv.sources]
-agentmesh = { path = "../agent-mesh-core", editable = true }
+[tool.hatch.metadata]
+allow-direct-references = true  # agentmesh is installed from its GitHub release tarball (no git needed)
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/legacybridge"]

@@ -50,7 +50,10 @@ Three ContextForge 1.1.0 container gotchas this setup handles, each found by run
 ## Run locally without Docker
 
 ```bash
-uv venv -p 3.13 && uv pip install -e ../agent-mesh-core -e '.[dev,gateway]'
+uv venv -p 3.13 && uv pip install -e '.[dev,gateway]'
+# agentmesh (the shared core) installs from its v0.1.0 release on GitHub. To work on
+# the core at the same time: git clone https://github.com/jsdavids/agent-mesh-core ../agent-mesh-core
+#   && uv pip install -e ../agent-mesh-core
 export JWT_SECRET_KEY=... AUTH_ENCRYPTION_SECRET=... PLATFORM_ADMIN_PASSWORD=... DEFAULT_USER_PASSWORD=...
 export MCPGATEWAY_ADMIN_API_ENABLED=true SSRF_ALLOW_LOCALHOST=true SSRF_ALLOW_PRIVATE_NETWORKS=true
 export LEGACY_API_KEY=... AGENTMESH_UPSTREAM_KEY=...
